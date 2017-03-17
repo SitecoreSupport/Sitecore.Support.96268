@@ -28,6 +28,7 @@ namespace Sitecore.Support.Pipelines.RenderField
         }
 
         // the metod was added to the initial version of the patch to fix the issue, which appears when <a> tag does not contain "src" or "href" attributes.
+
         protected bool CheckReferenceForAttributes(string wholeTag)
         {
             Assert.ArgumentNotNull(wholeTag, "wholeTag");
