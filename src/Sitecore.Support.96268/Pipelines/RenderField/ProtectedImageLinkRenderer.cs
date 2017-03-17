@@ -27,6 +27,21 @@ namespace Sitecore.Support.Pipelines.RenderField
             return ((num3 >= 0) && this.ContainsUnsafeParametersInQuery(renderedText.Substring(num3, num2 - num3)));
         }
 
+        // the metod was added to the initial version of the patch to fix the issue, which appears when <a> tag does not contain "src" or "href" attributes.
+        protected bool CheckReferenceForAttributes(string wholeTag)
+        {
+            Assert.ArgumentNotNull(wholeTag, "wholeTag");
+            bool flag = false;
+            for (int i = 0; i < srcAttrs.Length; i++)
+            {
+                if (wholeTag.Contains(srcAttrs[i] + "="))
+                {
+                    flag = true;
+                }
+            }
+            return flag;
+        }
+
         protected virtual bool ContainsUnsafeParametersInQuery(string urlParameters)
         {
             return !HashingUtils.IsSafeUrl(urlParameters);
@@ -76,7 +91,14 @@ namespace Sitecore.Support.Pipelines.RenderField
                     int num4 = renderedText.IndexOf(">", num3, StringComparison.OrdinalIgnoreCase) + 1;
                     builder.Append(renderedText.Substring(startIndex, num3 - startIndex));
                     string imgTag = renderedText.Substring(num3, num4 - num3);
-                    builder.Append(this.ReplaceReference(imgTag));
+
+                    //  Check whether "src" or "href" attributes exist in the tag
+
+                    if (CheckReferenceForAttributes(imgTag))
+                    {
+                        imgTag = this.ReplaceReference(imgTag);
+                    }
+                    builder.Append(imgTag);
                     startIndex = num4;
                 }
                 else
