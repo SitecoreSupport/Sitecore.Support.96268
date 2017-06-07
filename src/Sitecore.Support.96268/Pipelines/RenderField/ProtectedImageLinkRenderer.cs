@@ -19,7 +19,9 @@ namespace Sitecore.Support.Pipelines.RenderField
         {
             Assert.ArgumentNotNull(renderedText, "renderedText");
             renderedText = renderedText.Replace("&amp;", "&");
-            string str = srcAttrs.First<string>(p => renderedText.Contains(p + "="));
+            string str = srcAttrs.FirstOrDefault<string>(p => renderedText.Contains(p + "="));
+            if (string.IsNullOrEmpty(str))
+                return false;
             int startIndex = renderedText.IndexOf(str, tagStart, StringComparison.OrdinalIgnoreCase) + str.Length;
             startIndex = renderedText.IndexOfAny(this.quotes, startIndex) + 1;
             int num2 = renderedText.IndexOfAny(this.quotes, startIndex);
@@ -134,7 +136,9 @@ namespace Sitecore.Support.Pipelines.RenderField
             {
                 flag = false;
             }
-            string str2 = srcAttrs.First<string>(p => imgTag.Contains(p + "="));
+            string str2 = srcAttrs.FirstOrDefault<string>(p => imgTag.Contains(p + "="));
+            if (string.IsNullOrEmpty(str2))
+                return imgTag;
             int startIndex = imgTag.IndexOf(str2, StringComparison.OrdinalIgnoreCase) + str2.Length;
             startIndex = str.IndexOfAny(this.quotes, startIndex) + 1;
             int num2 = str.IndexOfAny(this.quotes, startIndex);
