@@ -18,7 +18,7 @@ namespace Sitecore.Support.Pipelines.RenderField
         protected bool CheckReferenceForParams(string renderedText, int tagStart)
         {
             Assert.ArgumentNotNull(renderedText, "renderedText");
-            renderedText = renderedText.Replace("&amp;", "&");
+            //enderedText = renderedText.Replace("&amp;", "&");
             string str = srcAttrs.FirstOrDefault<string>(p => renderedText.Contains(p + "="));
             if (string.IsNullOrEmpty(str))
                 return false;
