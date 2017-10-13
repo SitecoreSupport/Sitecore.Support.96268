@@ -1,160 +1,219 @@
-﻿using System;
-using System.Linq;
-using Sitecore.Configuration;
-using Sitecore.Diagnostics;
-using Sitecore.Pipelines.RenderField;
-using Sitecore.Resources.Media;
-using System.Text;
-
-namespace Sitecore.Support.Pipelines.RenderField
+﻿namespace Sitecore.Support.Pipelines.RenderField
 {
+    using System;
+    using Sitecore.Configuration;
+    using Sitecore.Diagnostics;
+    using Sitecore.Pipelines.RenderField;
+    using Sitecore.Resources.Media;
+    using System.Text;
+
     public class ProtectedImageLinkRenderer
     {
-        // Fields
-        private readonly char[] quotes = new char[] { '\'', '"' };
-        private static readonly string[] srcAttrs = new string[] { "src", "href" };
-
-        // Methods
-        protected bool CheckReferenceForParams(string renderedText, int tagStart)
+        /// <summary>
+        /// The quotes
+        /// </summary>
+        private readonly char[] quotes = new char[]
         {
-            Assert.ArgumentNotNull(renderedText, "renderedText");
-            // commented buggy code
-            //renderedText = renderedText.Replace("&amp;", "&");
+            '\'',
+            '"'
+        };
 
-            string str = srcAttrs.FirstOrDefault<string>(p => renderedText.Contains(p + "="));
-            if (string.IsNullOrEmpty(str))
-                return false;
-            int startIndex = renderedText.IndexOf(str, tagStart, StringComparison.OrdinalIgnoreCase) + str.Length;
-            startIndex = renderedText.IndexOfAny(this.quotes, startIndex) + 1;
-            int num2 = renderedText.IndexOfAny(this.quotes, startIndex);
-            int num3 = renderedText.IndexOf('?', startIndex, num2 - startIndex);
-            return ((num3 >= 0) && this.ContainsUnsafeParametersInQuery(renderedText.Substring(num3, num2 - num3)));
-        }
-
-        // the metod was added to the initial version of the patch to fix the issue, which appears when <a> tag does not contain "src" or "href" attributes.
-
-        protected bool CheckReferenceForAttributes(string wholeTag)
+        /// <summary>
+        /// Runs the processor.
+        /// </summary>
+        /// <param name="args">The arguments.</param>
+        public void Process(RenderFieldArgs args)
         {
-            Assert.ArgumentNotNull(wholeTag, "wholeTag");
-            bool flag = false;
-            for (int i = 0; i < srcAttrs.Length; i++)
+            Assert.ArgumentNotNull(args, "args");
+            if (!Settings.Media.RequestProtection.Enabled)
             {
-                if (wholeTag.Contains(srcAttrs[i] + "="))
-                {
-                    flag = true;
-                }
+                return;
             }
-            return flag;
+            if (args.FieldTypeKey.StartsWith("__"))
+            {
+                return;
+            }
+            args.Result.FirstPart = this.HashReferences(args.Result.FirstPart);
+            args.Result.LastPart = this.HashReferences(args.Result.LastPart);
         }
 
-        protected virtual bool ContainsUnsafeParametersInQuery(string urlParameters)
-        {
-            return !HashingUtils.IsSafeUrl(urlParameters);
-        }
-
+        /// <summary>
+        /// Gets the protected URL.
+        /// </summary>
+        /// <param name="url">The URL to protect.</param>
+        /// <returns>The protected by hash parameter URL.</returns>
         protected virtual string GetProtectedUrl(string url)
         {
             Assert.IsNotNull(url, "url");
             return HashingUtils.ProtectAssetUrl(url);
         }
 
+        /// <summary>
+        /// Hashes the references.
+        /// </summary>
+        /// <param name="renderedText">The rendered text.</param>
+        /// <returns>Fixed references</returns>
+        protected string HashReferences(string renderedText)
+        {
+            Assert.ArgumentNotNull(renderedText, "renderedText");
+            return this.HashLinkReferences(this.HashImageReferences(renderedText));
+        }
+
+        /// <summary>
+        /// Hashes the image references.
+        /// </summary>
+        /// <param name="renderedText">The rendered text.</param>
+        /// <returns>Fixed image references</returns>
         protected string HashImageReferences(string renderedText)
         {
             Assert.ArgumentNotNull(renderedText, "renderedText");
-            string str = "<img ";
-            if (renderedText.IndexOf(str, StringComparison.OrdinalIgnoreCase) < 0)
+            return this.HashReferences(renderedText, "img", "src");
+        }
+
+        /// <summary>
+        /// Hashes the anchor references.
+        /// </summary>
+        /// <param name="renderedText">The rendered text.</param>
+        /// <returns>Fixed anchor references</returns>
+        protected string HashLinkReferences(string renderedText)
+        {
+            Assert.ArgumentNotNull(renderedText, "renderedText");
+            return this.HashReferences(renderedText, "a", "href");
+        }
+
+        /// <summary>
+        /// Hashes the references.
+        /// </summary>
+        /// <param name="renderedText">The rendered text.</param>
+        /// <param name="tagName">tag name for the element contins a reference</param>
+        /// <param name="urlAttribute">attribute within tag element that contains the reference url</param>
+        /// <returns>Fixed image references</returns>
+        protected string HashReferences(string renderedText, string tagName, string urlAttribute)
+        {
+            Assert.ArgumentNotNull(renderedText, "renderedText");
+            Assert.ArgumentNotNull(tagName, "tagName");
+            Assert.ArgumentNotNull(urlAttribute, "urlAttribute");
+            string text = string.Format("<{0}", tagName);
+            if (renderedText.IndexOf(string.Format("{0} ", text), StringComparison.OrdinalIgnoreCase) < 0)
             {
-                str = "<a ";
-                if (renderedText.IndexOf(str, StringComparison.OrdinalIgnoreCase) < 0)
-                {
-                    return renderedText;
-                }
+                return renderedText;
             }
-            int startIndex = 0;
+            int i = 0;
             bool flag = false;
-            while ((startIndex < renderedText.Length) && !flag)
+            while (i < renderedText.Length && !flag)
             {
-                int tagStart = renderedText.IndexOf(str, startIndex, StringComparison.OrdinalIgnoreCase);
-                if (tagStart < 0)
+                int num = renderedText.IndexOf(text, i, StringComparison.OrdinalIgnoreCase);
+                if (num < 0)
                 {
                     break;
                 }
-                flag = this.CheckReferenceForParams(renderedText, tagStart);
-                startIndex = renderedText.IndexOf(">", tagStart, StringComparison.OrdinalIgnoreCase) + 1;
+                flag = this.CheckReferenceForParams(renderedText, num, tagName, urlAttribute);
+                int num2 = renderedText.IndexOf(">", num, StringComparison.OrdinalIgnoreCase) + 1;
+                i = num2;
             }
             if (!flag)
             {
                 return renderedText;
             }
-            startIndex = 0;
-            StringBuilder builder = new StringBuilder(renderedText.Length + 0x80);
-            while (startIndex < renderedText.Length)
+            i = 0;
+            StringBuilder stringBuilder = new StringBuilder(renderedText.Length + 128);
+            while (i < renderedText.Length)
             {
-                int num3 = renderedText.IndexOf(str, startIndex, StringComparison.OrdinalIgnoreCase);
+                int num3 = renderedText.IndexOf(text, i, StringComparison.OrdinalIgnoreCase);
                 if (num3 > -1)
                 {
                     int num4 = renderedText.IndexOf(">", num3, StringComparison.OrdinalIgnoreCase) + 1;
-                    builder.Append(renderedText.Substring(startIndex, num3 - startIndex));
-                    string imgTag = renderedText.Substring(num3, num4 - num3);
-
-                    //  Check whether "src" or "href" attributes exist in the tag
-
-                    if (CheckReferenceForAttributes(imgTag))
-                    {
-                        imgTag = this.ReplaceReference(imgTag);
-                    }
-                    builder.Append(imgTag);
-                    startIndex = num4;
+                    stringBuilder.Append(renderedText.Substring(i, num3 - i));
+                    string tagHtml = renderedText.Substring(num3, num4 - num3);
+                    stringBuilder.Append(this.ReplaceReference(tagHtml, urlAttribute));
+                    i = num4;
                 }
                 else
                 {
-                    builder.Append(renderedText.Substring(startIndex, renderedText.Length - startIndex));
-                    startIndex = 0x7fffffff;
+                    stringBuilder.Append(renderedText.Substring(i, renderedText.Length - i));
+                    i = 2147483647;
                 }
             }
-            return builder.ToString();
+            return stringBuilder.ToString();
         }
 
-        public void Process(RenderFieldArgs args)
+        /// <summary>
+        /// Checks the reference for parameters.
+        /// </summary>
+        /// <param name="renderedText">The rendered text.</param>
+        /// <param name="tagStartIndex">The tag start index.</param>
+        /// <returns><c>True</c> is reference contains dangerous parameters, <c>false</c> otherwise</returns>
+        protected bool CheckReferenceForParams(string renderedText, int tagStartIndex)
         {
-            Assert.ArgumentNotNull(args, "args");
-            if (Settings.Media.RequestProtection.Enabled && !args.FieldTypeKey.StartsWith("__"))
-            {
-                args.Result.FirstPart = this.HashImageReferences(args.Result.FirstPart);
-                args.Result.LastPart = this.HashImageReferences(args.Result.LastPart);
-            }
+            return this.CheckReferenceForParams(renderedText, tagStartIndex, "img", "src");
         }
 
-        private string ReplaceReference(string imgTag)
+        /// <summary>
+        /// Checks the reference for parameters.
+        /// </summary>
+        /// <param name="renderedText">The rendered text.</param>
+        /// <param name="tagStartIndex">The tag start index.</param>
+        /// <param name="tagName">tag name</param>
+        /// <param name="urlAttribute">url attribute name</param>
+        /// <returns><c>True</c> is reference contains dangerous parameters, <c>false</c> otherwise</returns>
+        protected bool CheckReferenceForParams(string renderedText, int tagStartIndex, string tagName, string urlAttribute)
         {
-            Assert.ArgumentNotNull(imgTag, "imgTag");
+            Assert.ArgumentNotNull(renderedText, "renderedText");
+            Assert.ArgumentNotNull(tagName, "tagName");
+            Assert.ArgumentNotNull(urlAttribute, "urlAttribute");
+            int num = renderedText.IndexOf(urlAttribute, tagStartIndex, StringComparison.OrdinalIgnoreCase) + 3;
+            num = renderedText.IndexOfAny(this.quotes, num) + 1;
+            int num2 = renderedText.IndexOfAny(this.quotes, num);
+            int num3 = renderedText.IndexOf('?', num, num2 - num);
+            return num3 >= 0 && this.ContainsUnsafeParametersInQuery(renderedText.Substring(num3, num2 - num3).Replace("&amp;", "&"));
+        }
+
+        /// <summary>
+        /// Determines whether specified URL query parameters contain parameters to protect.
+        /// </summary>
+        /// <param name="urlParameters">The URL parameters.</param>
+        /// <returns>
+        ///   <c>true</c> if specified URL query parameters contain parameters to protect; otherwise, <c>false</c>.
+        /// </returns>
+        protected virtual bool ContainsUnsafeParametersInQuery(string urlParameters)
+        {
+            return !HashingUtils.IsSafeUrl(urlParameters);
+        }
+
+        /// <summary>
+        /// Replaces the reference.
+        /// </summary>
+        /// <param name="tagHtml">The <c>img</c> tag.</param>
+        /// <param name="urlAttribute">url attribute name</param>
+        /// <returns>Fixed image reference</returns>
+        private string ReplaceReference(string tagHtml, string urlAttribute)
+        {
+            Assert.ArgumentNotNull(tagHtml, "tagHtml");
+            Assert.ArgumentNotNull(urlAttribute, "urlAttribute");
             bool flag = true;
-            string str = imgTag;
-            if (imgTag.Contains("&amp;"))
+            string text = tagHtml;
+            if (tagHtml.Contains("&amp;"))
             {
-                str = str.Replace("&amp;", "&");
+                text = text.Replace("&amp;", "&");
             }
-            else if (imgTag.Contains("&"))
+            else if (tagHtml.Contains("&"))
             {
                 flag = false;
             }
-            string str2 = srcAttrs.FirstOrDefault<string>(p => imgTag.Contains(p + "="));
-            if (string.IsNullOrEmpty(str2))
-                return imgTag;
-            int startIndex = imgTag.IndexOf(str2, StringComparison.OrdinalIgnoreCase) + str2.Length;
-            startIndex = str.IndexOfAny(this.quotes, startIndex) + 1;
-            int num2 = str.IndexOfAny(this.quotes, startIndex);
-            string url = str.Substring(startIndex, num2 - startIndex);
-            if (!url.Contains("?"))
+            int num = text.IndexOf(urlAttribute, StringComparison.OrdinalIgnoreCase) + 3;
+            num = text.IndexOfAny(this.quotes, num) + 1;
+            int num2 = text.IndexOfAny(this.quotes, num);
+            string text2 = text.Substring(num, num2 - num);
+            if (!text2.Contains("?"))
             {
-                return imgTag;
+                return tagHtml;
             }
-            url = this.GetProtectedUrl(url);
+            text2 = this.GetProtectedUrl(text2);
             if (flag)
             {
-                url = url.Replace("&", "&amp;");
+                text2 = text2.Replace("&", "&amp;");
             }
-            return (str.Substring(0, startIndex) + url + str.Substring(num2, str.Length - num2));
+            return text.Substring(0, num) + text2 + text.Substring(num2, text.Length - num2);
         }
     }
 }
