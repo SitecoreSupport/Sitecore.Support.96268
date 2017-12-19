@@ -56,7 +56,7 @@
         protected string HashReferences(string renderedText)
         {
             Assert.ArgumentNotNull(renderedText, "renderedText");
-            return this.HashLinkReferences(this.HashImageReferences(renderedText));
+            return this.HashVideoReferences(HashLinkReferences(this.HashImageReferences(renderedText)));
         }
 
         /// <summary>
@@ -79,6 +79,17 @@
         {
             Assert.ArgumentNotNull(renderedText, "renderedText");
             return this.HashReferences(renderedText, "a", "href");
+        }
+
+        /// <summary>
+        /// Hashes the video references.
+        /// </summary>
+        /// <param name="renderedText">The rendered text.</param>
+        /// <returns>Fixed video references</returns>
+        protected string HashVideoReferences(string renderedText)
+        {
+            Assert.ArgumentNotNull(renderedText, "renderedText");
+            return this.HashReferences(renderedText, "video", "poster");
         }
 
         /// <summary>
